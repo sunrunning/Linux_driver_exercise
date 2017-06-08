@@ -1,4 +1,4 @@
-obj-m += hello.o
+obj-m += chardev.o
 
 CURRENT_PATH:=$(shell pwd)
 

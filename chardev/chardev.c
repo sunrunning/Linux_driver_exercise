@@ -8,14 +8,16 @@
 #include <linux/cdev.h>
 #include <linux/kernel.h>
 #include <asm/io.h>
-#include <asm/system.h>
+//#include <asm/system.h>
 #include <asm/uaccess.h>
+#include <linux/slab.h>
 
 #include "chardev.h"
 
-static chardev_mahor = MEMDEV_MAJOR;
+static int chardev_major = CHARDEV_MAJOR;
+module_param(chardev_major, int, S_IRUGO);
 
-struct chardev *chardevp;
+struct chardev *char_devp;
 
 struct cdev cdev;
 
@@ -33,7 +35,7 @@ int chardev_open(struct inode *inode, struct file *filp)
 	if (num > CHARDEV_NR_DEVS) {
 		return -ENODEV;
 	}
-	dev = &chardevp[num];
+	dev = &char_devp[num];
 	
 	//
 	filp->private_data = dev;
@@ -70,7 +72,7 @@ static ssize_t chardev_read(struct file *filp, char __user *buf, size_t size, lo
 		*ppos += count;
 		ret = count;
 
-		printk(KERN_INFO "read %d bytes from %d\n", count, p);
+		printk(KERN_INFO "read %d bytes from %ld\n", count, p);
 	}
 	return ret;
 }
@@ -98,10 +100,46 @@ static ssize_t chardev_write(struct file *filp, const char __user *buf, size_t s
 		*ppos += count;
 		ret = count;
 
-		printk(KERN_INFO "written %d bytes from %d\n", count, p);
+		printk(KERN_INFO "written %d bytes from %ld\n", count, p);
 	}
 	return ret;
 }
+
+//Seek file location position
+static loff_t chardev_llseek(struct file *filp, loff_t offset, int whence)
+{
+	loff_t newpos;
+
+	switch(whence) {
+		case 0://Seek set
+			newpos = offset;
+			break;
+		case 1://Seek current
+			newpos = filp->f_pos + offset;
+			break;
+		case 2://Seek end
+			newpos = CHARDEV_SIZE - 1 + offset;
+			break;
+		default://not happen
+			return -EINVAL;
+	}
+	if ((newpos < 0) || (newpos > CHARDEV_SIZE)) {
+		return -EINVAL;
+	}
+
+	filp->f_pos = newpos;
+	return newpos;
+}
+
+//file operation struct
+static const struct file_operations chardev_fops = {
+	.owner = THIS_MODULE,
+	.llseek = chardev_llseek,
+	.read = chardev_read,
+	.write = chardev_write,
+	.open = chardev_open,
+	.release = chardev_release,
+};
 
 //This is module load function
 static int __init chardev_init(void)
@@ -120,21 +158,45 @@ static int __init chardev_init(void)
 	if (result < 0) {
 		return result;
 	}
+	
+	cdev_init(&cdev, &chardev_fops);
+	cdev.owner = THIS_MODULE;
+	cdev.ops = &chardev_fops;
+	
+	cdev_add(&cdev, MKDEV(chardev_major, 0), CHARDEV_NR_DEVS);
+	
+	//Apply kernel memory for char dev struct
+	char_devp = kmalloc(CHARDEV_NR_DEVS * sizeof(struct chardev), GFP_KERNEL);
+	if (!char_devp) {
+		result = -ENOMEM;
+		goto fail_malloc;
+	}
+	memset(char_devp, 0, sizeof(struct chardev));
 
-	printk(KERN_ALERT "Hello Kernel!\n");
+	for (i = 0; i < CHARDEV_NR_DEVS; i++) {
+		char_devp[i].size = CHARDEV_SIZE;
+		//Real data memory space is applied here
+		char_devp[i].data = kmalloc(CHARDEV_SIZE, GFP_KERNEL);
+		memset(char_devp[i].data, 0, CHARDEV_SIZE);
+	}
 	return 0;
+fail_malloc:
+	unregister_chrdev_region(devno, 1);
+	return result;
 }
 
 
 //This is module unload function
-static void __exit hello_exit(void)
+static void __exit chardev_exit(void)
 {
-	printk(KERN_ALERT "Goodbye Kernel!\n");
+	cdev_del(&cdev);
+	kfree(char_devp);//Free char dev struct memory
+	unregister_chrdev_region(MKDEV(chardev_major, 0), 2);//Release device number
 }
 
 //Register the load function
-module_init(hello_init);
-module_exit(hello_exit);
+module_init(chardev_init);
+module_exit(chardev_exit);
 
 //This is optional
 MODULE_AUTHOR("John Lee");
