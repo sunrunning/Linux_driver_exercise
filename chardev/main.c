@@ -9,25 +9,25 @@
 int main()
 {
 	int fd;
-	char buf[] = "This char driver demo!";
+	char buf[] = "This is a char demo~";
 	
 	char buf_read[1024];
 
-	if (fd = open("./chardev.txt", O_RDWR | O_CREAT) == -1) {
+	if ((fd = open("/dev/chardev", O_RDWR | O_CREAT)) == -1) {
 		printf("Open chardev error!\n");
 		goto failexit;
 	} else {
-		printf("Open chardev success!");
-	}
+		printf("Open chardev success!\n");
+	 }
 	
 	lseek(fd, 0, SEEK_SET);
 	read(fd, buf_read, sizeof(buf));
-	printf("Before buf is %s", buf_read);
+	printf("Before buf is:%s\n", buf_read);
 	write(fd, buf, sizeof(buf));
 	
-	lseek(fd, 5, SEEK_SET);
+	lseek(fd, 10, SEEK_SET);
 	read(fd, buf_read, sizeof(buf));
-	printf("After buf is %s", buf_read);
+	printf("After buf is:%s\n", buf_read);
 
 failexit:
 	close(fd);

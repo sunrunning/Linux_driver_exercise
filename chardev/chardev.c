@@ -72,7 +72,7 @@ static ssize_t chardev_read(struct file *filp, char __user *buf, size_t size, lo
 		*ppos += count;
 		ret = count;
 
-		printk(KERN_INFO "read %d bytes from %ld\n", count, p);
+		//printk(KERN_INFO "read %d bytes from %ld\n", count, p);
 	}
 	return ret;
 }
@@ -100,7 +100,7 @@ static ssize_t chardev_write(struct file *filp, const char __user *buf, size_t s
 		*ppos += count;
 		ret = count;
 
-		printk(KERN_INFO "written %d bytes from %ld\n", count, p);
+		//printk(KERN_INFO "written %d bytes from %ld\n", count, p);
 	}
 	return ret;
 }
@@ -189,7 +189,11 @@ fail_malloc:
 //This is module unload function
 static void __exit chardev_exit(void)
 {
+	int i;
 	cdev_del(&cdev);
+	for (i = 0; i < CHARDEV_NR_DEVS; i++) {
+		kfree(char_devp[i].data);
+	}
 	kfree(char_devp);//Free char dev struct memory
 	unregister_chrdev_region(MKDEV(chardev_major, 0), 2);//Release device number
 }
